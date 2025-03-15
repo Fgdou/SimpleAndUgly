@@ -41,6 +41,10 @@ impl SessionTokenList {
             Some(token) => Ok(token)
         }
     }
+
+    pub fn remove_token(&mut self, token: &str) {
+        let _ = self.list.remove(token);
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -55,7 +59,7 @@ impl SessionToken {
         SessionToken {
             expiration: Utc::now() + Days::new(10),
             value: Alphanumeric.sample_string(&mut rand::rng(), 64),
-            username: username
+            username
         }
     }
     pub fn get_username(&self) -> &str {
@@ -86,6 +90,9 @@ impl User {
     }
     pub fn verify_password(&self, password: &str) -> bool {
         &self.password == password
+    }
+    pub fn get_email(&self) -> &str {
+        &self.email
     }
 }
 
