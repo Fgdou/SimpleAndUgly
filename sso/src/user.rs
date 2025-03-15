@@ -1,40 +1,80 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Days, Utc};
+use rand::distr::{Alphanumeric, SampleString};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct User {
     username: String,
     password: String,
     email: String,
-    tokens: HashMap<String, DateTime<Utc>>,
     registration_date: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SessionTokenList {
+    list: HashMap<String, SessionToken>,
+}
+
+impl SessionTokenList {
+    pub fn new() -> SessionTokenList {
+        SessionTokenList {
+            list: HashMap::new(),
+        }
+    }
+    pub fn from_list(list: Vec<SessionToken>) -> SessionTokenList {
+        SessionTokenList {
+            list: list.into_iter().fold(HashMap::new(), |mut map, i| {
+                map.insert(i.value.clone(), i);
+                map
+            })
+        }
+    }
+    pub fn insert_token(&mut self, token: SessionToken) {
+        self.list.insert(token.value.clone(), token);
+    }
+    pub fn verify_token(&self, token: &str) -> Result<&SessionToken, TokenError> {
+        match self.list.get(token) {
+            None => Err(TokenError::NotExist),
+            Some(token) if token.expiration <= Utc::now() => Err(TokenError::Expired),
+            Some(token) => Ok(token)
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SessionToken {
-    pub value: String,
-    pub expiration: DateTime<Utc>
+    value: String,
+    expiration: DateTime<Utc>,
+    username: String,
+}
+
+impl SessionToken {
+    pub fn new(username: String) -> SessionToken {
+        SessionToken {
+            expiration: Utc::now() + Days::new(10),
+            value: Alphanumeric.sample_string(&mut rand::rng(), 64),
+            username: username
+        }
+    }
+    pub fn get_username(&self) -> &str {
+        &self.username
+    }
+    pub fn get_expiration(&self) -> &DateTime<Utc> {
+        &self.expiration
+    }
+    pub fn get_value(&self) -> &str {
+        &self.value
+    }
 }
 
 impl User {
-    pub fn add_token(&mut self, token: SessionToken) {
-        self.tokens.insert(token.value, token.expiration);
-    }
-    pub fn verify_token(&self, token: &str) -> Result<(), TokenError> {
-        match self.tokens.get(token) {
-            None => Err(TokenError::NotExist),
-            Some(date) if date <= &Utc::now() => Err(TokenError::Expired),
-            _ => Ok(())
-        }
-    }
     pub fn new(username: String, password: String, email: String) -> User {
         User {
             username,
             password,
             email,
-            tokens: HashMap::new(),
             registration_date: Utc::now(),
         }
     }
@@ -63,19 +103,25 @@ mod tests {
 
     #[test]
     fn test_verify_token() {
-        let mut user = User::new("admin".to_string(), "admin".to_string(), "admin@example.com".to_string());
-        user.add_token(SessionToken{
-            value: "token1".to_string(),
-            expiration: Utc::now() - Days::new(1)
-        });
-        user.add_token(SessionToken{
-            value: "token2".to_string(),
-            expiration: Utc::now() + Days::new(1)
-        });
+        let mut token_list = SessionTokenList::new();
 
-        assert_eq!(Ok(()), user.verify_token(&"token2"));
-        assert_eq!(Err(TokenError::Expired), user.verify_token(&"token1"));
-        assert_eq!(Err(TokenError::NotExist), user.verify_token(&"token3"))
+        let token1 = SessionToken{
+            value: "token1".to_string(),
+            expiration: Utc::now() - Days::new(1),
+            username: "admin".to_string(),
+        };
+        let token2 = SessionToken{
+            value: "token2".to_string(),
+            expiration: Utc::now() + Days::new(1),
+            username: "admin".to_string(),
+        };
+
+        token_list.insert_token(token1.clone());
+        token_list.insert_token(token2.clone());
+
+        assert_eq!(Ok(&token2), token_list.verify_token(&"token2"));
+        assert_eq!(Err(TokenError::Expired), token_list.verify_token(&"token1"));
+        assert_eq!(Err(TokenError::NotExist), token_list.verify_token(&"token3"))
     }
 
     #[test]

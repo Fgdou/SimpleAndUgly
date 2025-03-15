@@ -1,10 +1,11 @@
 use chrono::{Days, Utc};
 use rand::distr::{Alphanumeric, SampleString};
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::process::exit;
 
-use crate::user::{SessionToken, TokenError, User};
+use crate::user::{SessionToken, SessionTokenList, TokenError, User};
 
 
 #[derive(Debug, Clone)]
@@ -13,22 +14,24 @@ pub enum LoginError {
     InvalidPassword,
 }
 
-fn generate_token() -> SessionToken {
-    SessionToken {
-        expiration: Utc::now() + Days::new(10),
-        value: Alphanumeric.sample_string(&mut rand::rng(), 64),
-    }
+#[derive(Serialize, Deserialize, Debug)]
+struct Data {
+    users: Vec<User>,
+    login_tokens: SessionTokenList,
 }
 
 pub struct LoginSystem {
-    users: Vec<User>,
+    data: Data,
     db_path: String,
 }
 
 impl LoginSystem {
     pub fn new(db_path: String) -> LoginSystem {
         let mut instance = LoginSystem {
-            users: vec!(),
+            data: Data {
+                users: vec!(),
+                login_tokens: SessionTokenList::new(),
+            },
             db_path,
         };
 
@@ -36,7 +39,7 @@ impl LoginSystem {
             Ok(()) => (),
             Err(ErrorLoading::FailToOpenFile(path)) => {
                 println!("Fail to load {}. Create database.", path);
-                instance.users.push(User::new("admin".to_string(), "admin".to_string(), "admin@example.com".to_string()));
+                instance.data.users.push(User::new("admin".to_string(), "admin".to_string(), "admin@example.com".to_string()));
             },
             Err(ErrorLoading::FailToParseJson) => {
                 println!("Error : fail to parse JSON from the database");
@@ -52,16 +55,16 @@ impl LoginSystem {
     }
 
     pub fn login(&mut self, username: &str, password: &str) -> Result<SessionToken, LoginError> {
-        let user = self.users.iter_mut().find(|user| user.get_username() == username);
+        let user = self.data.users.iter_mut().find(|user| user.get_username() == username);
 
-        let user = match user {
+        match user {
             None => Err(LoginError::InvalidUser),
             Some(user) if !user.verify_password(password) => Err(LoginError::InvalidPassword),
             Some(user) => Ok(user),
         }?;
 
-        let token = generate_token();
-        user.add_token(token.clone());
+        let token = SessionToken::new(username.to_string());
+        self.data.login_tokens.insert_token(token.clone());
 
         if let None = self.save() {
             println!("Warn : fail to save Database");
@@ -71,19 +74,18 @@ impl LoginSystem {
     }
 
     pub fn verifyToken(&self, token: &str) -> Result<&User, TokenError> {
-        for user in &self.users {
-            match user.verify_token(token) {
-                Ok(()) => return Ok(user),
-                Err(TokenError::Expired) => return Err(TokenError::Expired),
-                Err(TokenError::NotExist) => ()
-            }
-        }
+        let username = self.data.login_tokens.verify_token(token)?.get_username();
 
-        Err(TokenError::NotExist)
+        let user = self.data.users.iter().find(|user| user.get_username() == username);
+
+        match user {
+            None => Err(TokenError::NotExist),
+            Some(user) => Ok(&user),
+        }
     }
 
     fn save(&self) -> Option<()> {
-        let json = serde_json::to_string(&self.users).ok()?;
+        let json = serde_json::to_string(&self.data).ok()?;
         fs::write(&self.db_path, json).ok()?;
         Some(())
     }
@@ -94,7 +96,7 @@ impl LoginSystem {
             Ok(json) => match serde_json::from_str(&json) {
                 Err(_) => Err(ErrorLoading::FailToParseJson),
                 Ok(data) => {
-                    self.users = data;
+                    self.data = data;
                     Ok(())
                 }
             }
@@ -105,4 +107,32 @@ impl LoginSystem {
 enum ErrorLoading {
     FailToOpenFile(String),
     FailToParseJson
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_verify_token() {
+        let user = User::new("admin".to_string(), "admin".to_string(), "admin@example.com".to_string());
+        let mut instance = LoginSystem {
+            data: Data {
+                login_tokens: SessionTokenList::new(),
+                users: vec!(
+                    user.clone(),
+                ),
+            },
+            db_path: String::new(),
+        };
+        assert_eq!(Err(TokenError::NotExist), instance.verifyToken(&"token1"));
+
+        let token1 = SessionToken::new("admin".to_string());
+        let token2 = SessionToken::new("test".to_string());
+        instance.data.login_tokens.insert_token(token1.clone());
+        instance.data.login_tokens.insert_token(token2.clone());
+
+        assert_eq!(Ok(&user), instance.verifyToken(&token1.get_value()));
+        assert_eq!(Err(TokenError::NotExist), instance.verifyToken(&token2.get_value()));
+    }
 }
