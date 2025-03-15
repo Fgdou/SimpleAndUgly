@@ -77,4 +77,12 @@ mod tests {
         assert_eq!(Err(TokenError::Expired), user.verify_token(&"token1"));
         assert_eq!(Err(TokenError::NotExist), user.verify_token(&"token3"))
     }
+
+    #[test]
+    fn test_verify_password() {
+        let user = User::new("admin".to_string(), "admin".to_string(), "admin@example.com".to_string());
+
+        assert_eq!(true, user.verify_password("admin"));
+        assert_eq!(false, user.verify_password("admine"));
+    }
 }
