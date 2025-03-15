@@ -1,8 +1,8 @@
 use std::{rc::Rc, sync::Arc};
 
-use repositories::{tokens::{TokenRepo, TokenRepoSQLite}, users::UserRepoSQLite};
+use repositories::{tokens::{TokenRepo}, users::UserRepo};
 use rusqlite::Connection;
-use services::auth::{Auth, BasicAuth, UserRequest};
+use services::auth::{Auth, UserRequest};
 
 mod errors;
 mod objects;
@@ -10,16 +10,16 @@ mod repositories;
 mod services;
 
 pub struct Instance {
-    auth: Arc<dyn Auth>
+    auth: Arc<Auth>
 }
 impl Instance {
     fn new(path: &str) -> Instance {
         let conn = Rc::new(Connection::open(path).unwrap());
 
-        let tokens = Rc::new(TokenRepoSQLite::new(conn.clone()));
-        let users = Rc::new(UserRepoSQLite::new(conn.clone()));
+        let tokens = Rc::new(TokenRepo::new(conn.clone()));
+        let users = Rc::new(UserRepo::new(conn.clone()));
 
-        let auth = BasicAuth {
+        let auth = Auth {
             token_repo: tokens,
             user_repo: users,
         };

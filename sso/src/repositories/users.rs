@@ -4,17 +4,12 @@ use rusqlite::Connection;
 
 use crate::objects::user::User;
 
-pub trait UserRepo {
-    fn get_users(&self) -> Vec<User>;
-    fn get_user_by_email(&self, email: &str) -> Option<User>;
-    fn add_user(&self, user: User);
-}
 
-pub struct UserRepoSQLite {
+pub struct UserRepo {
     connection: Rc<Connection>,
 }
 
-impl UserRepoSQLite {
+impl UserRepo {
     pub fn new(connection: Rc<Connection>) -> Self {
         connection.execute("
             CREATE TABLE IF NOT EXISTS users (
@@ -28,17 +23,14 @@ impl UserRepoSQLite {
             connection
         }
     }
-}
-
-impl UserRepo for UserRepoSQLite {
-    fn get_users(&self) -> Vec<User> {
+    pub fn get_users(&self) -> Vec<User> {
         let mut stmt = self.connection.prepare("SELECT * FROM users").unwrap();
         stmt.query_map([], |row| User::from_sql(row)).unwrap()
             .map(|user| user.unwrap())
             .collect()
     }
 
-    fn get_user_by_email(&self, email: &str) -> Option<User> {
+    pub fn get_user_by_email(&self, email: &str) -> Option<User> {
         let mut stmt = self.connection.prepare("SELECT * FROM users WHERE email = ?").unwrap();
         let user = stmt.query_map([email], |row| User::from_sql(row)).unwrap()
                 .map(|user| user.unwrap())
@@ -46,7 +38,7 @@ impl UserRepo for UserRepoSQLite {
         user
     }
 
-    fn add_user(&self, user: User) {
+    pub fn add_user(&self, user: User) {
         self.connection.execute("INSERT INTO users (email, password, name, creation_date) VALUES (?, ?, ?, ?)", (
             &user.email,
             user.get_raw_password(),

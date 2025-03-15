@@ -14,20 +14,13 @@ impl Into<User> for UserRequest {
     }
 }
 
-pub trait Auth {
-    fn login(&self, email: &str, password: &str) -> Result<Token, LoginError>;
-    fn register(&self, token: &str, user: UserRequest) -> Result<(), RegisterError>;
-    fn create_register_token(&self, email: String) -> Token;
-    fn authenticate(&self, token: &str) -> Result<User, AuthError>;
+pub struct Auth {
+    pub user_repo: Rc<UserRepo>,
+    pub token_repo: Rc<TokenRepo>,
 }
 
-pub struct BasicAuth {
-    pub user_repo: Rc<dyn UserRepo>,
-    pub token_repo: Rc<dyn TokenRepo>,
-}
-
-impl Auth for BasicAuth {
-    fn login(&self, email: &str, password: &str) -> Result<Token, LoginError> {
+impl Auth {
+    pub fn login(&self, email: &str, password: &str) -> Result<Token, LoginError> {
         match self.user_repo.get_user_by_email(email) {
             None => Err(LoginError::InvalidEmail),
             Some(user) => {
@@ -42,7 +35,7 @@ impl Auth for BasicAuth {
             }
         }
     }
-    fn register(&self, token: &str, user: UserRequest) -> Result<(), RegisterError> {
+    pub fn register(&self, token: &str, user: UserRequest) -> Result<(), RegisterError> {
         let email = match self.token_repo.get_token(token, &TokenType::Registration) {
             None => Err(RegisterError::TokenNotExist),
             Some(token) if !token.is_valid() => Err(RegisterError::TokenExpired),
@@ -66,13 +59,13 @@ impl Auth for BasicAuth {
         Ok(())
 
     }
-    fn create_register_token(&self, email: String) -> Token {
+    pub fn create_register_token(&self, email: String) -> Token {
         let token = Token::new(email, TokenType::Registration);
         self.token_repo.add_token(token.clone());
         token
     }
 
-    fn authenticate(&self, token: &str) -> Result<User, AuthError> {
+    pub fn authenticate(&self, token: &str) -> Result<User, AuthError> {
         let email = match self.token_repo.get_token(token, &TokenType::Session) {
             None => Err(AuthError::TokenNotExist),
             Some(token) if !token.is_valid() => Err(AuthError::TokenExpired),
