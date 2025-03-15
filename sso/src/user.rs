@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
 pub struct User {
-    pub username: String,
-    pub password: String,
-    pub email: String,
+    username: String,
+    password: String,
+    email: String,
     tokens: HashMap<String, DateTime<Utc>>,
+    registrationDate: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug)]
@@ -32,7 +33,17 @@ impl User {
             password,
             email,
             tokens: HashMap::new(),
+            registrationDate: Utc::now(),
         }
+    }
+    pub fn get_registration_date(&self) -> &DateTime<Utc> {
+        &self.registrationDate
+    }
+    pub fn get_username(&self) -> &String {
+        &self.username
+    }
+    pub fn verify_password(&self, password: &String) -> bool {
+        &self.password == password
     }
 }
 

@@ -29,12 +29,12 @@ impl LoginSystem {
         }
     }
 
-    pub fn login(&mut self, username: String, password: String) -> Result<SessionToken, LoginError> {
-        let user = self.users.iter_mut().find(|user| user.username == username);
+    pub fn login(&mut self, username: &String, password: &String) -> Result<SessionToken, LoginError> {
+        let user = self.users.iter_mut().find(|user| user.get_username() == username);
 
         let user = match user {
             None => Err(LoginError::InvalidUser),
-            Some(user) if user.password != password => Err(LoginError::InvalidPassword),
+            Some(user) if !user.verify_password(password) => Err(LoginError::InvalidPassword),
             Some(user) => Ok(user),
         }?;
 
