@@ -1,9 +1,5 @@
-use chrono::{Days, Utc};
-use rand::distr::{Alphanumeric, SampleString};
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File};
-use std::io::prelude::*;
-use std::process::exit;
+use std::fs;
 
 use crate::user::{SessionToken, SessionTokenList, TokenError, User};
 
@@ -141,7 +137,7 @@ impl LoginSystem {
 }
 
 #[derive(PartialEq, Debug)]
-enum LoadError {
+pub enum LoadError {
     FailToOpenFile(String),
     FailToParseJson
 }
