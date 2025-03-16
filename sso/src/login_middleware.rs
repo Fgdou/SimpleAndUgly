@@ -27,7 +27,13 @@ pub async fn login_middleware(
         None => return Err(Error::from(AuthError::TokenNotExist)),
         Some(cookie) => cookie
     };
-    let user = state.auth.authenticate(cookie.value())?;
+    let user = match state.auth.authenticate(cookie.value()) {
+        Err(_) if excluded_path.contains(&req.path()) => {
+            return Ok(next.call(req).await?)
+        }
+        Err(e) => return Err(Error::from(e)),
+        Ok(e) => e
+    };
     *state.user.lock().unwrap() = Some(user);
 
     Ok(next.call(req).await?)

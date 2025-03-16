@@ -55,4 +55,13 @@ impl TokenRepo {
             Ok(())
         }
     }
+
+    pub fn get_tokens(&self, t: &TokenType) -> Vec<Token> {
+        let connection = self.connection.lock().unwrap();
+        let mut stmt = connection.prepare("SELECT * FROM tokens WHERE token_type = ?").unwrap();
+        let token = stmt.query_map((t,), |row| Token::from_sql(row)).unwrap()
+            .map(|token| token.unwrap())
+            .collect();
+        token
+    }
 }
