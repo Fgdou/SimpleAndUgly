@@ -1,0 +1,5 @@
+services:
+  sso:
+    build: sso
+    ports:
+      - 8080:8080
