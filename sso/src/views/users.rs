@@ -53,7 +53,7 @@ fn list_user_page(state: &web::Data<AppState>, action_info: ActionInfo) -> impl 
         }
 
         form action="./" method="post" {
-            input type="text" name="email" placeholder="email";
+            input type="email" name="email" placeholder="email";
             button type="submit" {"Create registration token"}
         }
     )
