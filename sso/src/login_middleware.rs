@@ -1,10 +1,23 @@
-use std::rc::Rc;
+use crate::errors::login::AuthError;
+use crate::AppState;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::{web, Error};
+use actix_web::http::header::{HeaderValue, CACHE_CONTROL};
 use actix_web::middleware::Next;
-use crate::AppState;
-use crate::errors::login::AuthError;
+use actix_web::{web, Error};
+use std::rc::Rc;
+
+fn authenticate(req: &ServiceRequest) -> Result<(), AuthError> {
+    let state: &web::Data<AppState> = req.app_data().unwrap();
+
+    let cookie = match req.cookie("token") {
+        None => return Err(AuthError::TokenNotExist),
+        Some(cookie) => cookie
+    };
+    let user = state.auth.authenticate(cookie.value())?;
+    *state.user.lock().unwrap() = Some(user);
+    Ok(())
+}
 
 pub async fn login_middleware(
     req: ServiceRequest,
@@ -18,23 +31,16 @@ pub async fn login_middleware(
         "/register",
     ];
 
-    let state: &web::Data<AppState> = req.app_data().unwrap();
+    let public = excluded_path.contains(&req.path());
 
-    let cookie = match req.cookie("token") {
-        None if excluded_path.contains(&req.path()) => {
-            return Ok(next.call(req).await?)
-        }
-        None => return Err(Error::from(AuthError::TokenNotExist)),
-        Some(cookie) => cookie
-    };
-    let user = match state.auth.authenticate(cookie.value()) {
-        Err(_) if excluded_path.contains(&req.path()) => {
-            return Ok(next.call(req).await?)
-        }
-        Err(e) => return Err(Error::from(e)),
-        Ok(e) => e
-    };
-    *state.user.lock().unwrap() = Some(user);
+    match (authenticate(&req), public) {
+        (_, true) => (),
+        (Ok(()), _) => (),
+        (Err(e), _) => return Err(Error::from(e))
+    }
 
-    Ok(next.call(req).await?)
+    let mut res = next.call(req).await?;
+    res.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+
+    Ok(res)
 }
