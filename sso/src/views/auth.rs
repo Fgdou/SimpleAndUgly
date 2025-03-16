@@ -2,7 +2,7 @@ use crate::errors::login::LoginError;
 use crate::AppState;
 use actix_web::cookie::time::OffsetDateTime;
 use actix_web::cookie::Cookie;
-use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Scope};
 use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
 use std::ops::Deref;
@@ -29,7 +29,7 @@ struct LoginRequest {
     password: String,
 }
 #[post("/login")]
-pub async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState>) -> impl Responder {
+async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState>) -> impl Responder {
     let token = state.auth.login(&body.email, &body.password);
 
     let mut response = HttpResponse::Ok();
@@ -56,7 +56,7 @@ pub async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState
     }
 }
 #[get("/logout")]
-pub async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
     state.auth.token_repo.invalidate_token(req.cookie("token").unwrap().value()).unwrap();
     HttpResponse::Ok()
         .cookie(
@@ -86,4 +86,10 @@ fn login_content(error: Option<LoginError>) -> Markup {
             };
         }
     )
+}
+
+pub fn apply_scope(scope: Scope) -> Scope {
+    scope.service(login)
+        .service(login_post)
+        .service(logout)
 }
