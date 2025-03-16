@@ -2,14 +2,15 @@ use chrono::{DateTime, Days, Utc};
 use rand::distr::SampleString;
 use rand_distr::Alphanumeric;
 use rusqlite::{types::{FromSql, FromSqlError}, ToSql};
+use serde::Serialize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum TokenType {
     Registration,
     Session,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Token {
     pub value: String,
     pub expiration: Option<DateTime<Utc>>,

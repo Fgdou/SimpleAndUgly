@@ -1,5 +1,4 @@
-use std::rc::Rc;
-
+use std::sync::Arc;
 use crate::{errors::{login::{AuthError, LoginError}, register::RegisterError}, objects::{token::{Token, TokenType}, user::User}, repositories::{tokens::TokenRepo, users::UserRepo}};
 
 pub struct UserRequest {
@@ -15,8 +14,8 @@ impl Into<User> for UserRequest {
 }
 
 pub struct Auth {
-    pub user_repo: Rc<UserRepo>,
-    pub token_repo: Rc<TokenRepo>,
+    pub user_repo: Arc<UserRepo>,
+    pub token_repo: Arc<TokenRepo>,
 }
 
 impl Auth {
@@ -82,7 +81,7 @@ impl Auth {
 #[cfg(test)]
 mod tests {
     use std::fs;
-
+    use std::sync::{Arc, Mutex};
     use rusqlite::Connection;
 
     use crate::{errors::login::{AuthError, LoginError}, objects::user::User};
@@ -93,10 +92,10 @@ mod tests {
         let path = "/tmp/testdb.sqlite";
         let _ = fs::remove_file(path);
 
-        let conn = Rc::new(Connection::open(path).unwrap());
+        let conn = Arc::new(Mutex::new(Connection::open(path).unwrap()));
 
-        let tokens = Rc::new(TokenRepo::new(conn.clone()));
-        let users = Rc::new(UserRepo::new(conn.clone()));
+        let tokens = Arc::new(TokenRepo::new(conn.clone()));
+        let users = Arc::new(UserRepo::new(conn.clone()));
 
         let auth = Auth {
             token_repo: tokens,

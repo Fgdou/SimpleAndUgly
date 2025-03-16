@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use rusqlite::Error;
+use serde::Serialize;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct User {
     pub email: String,
     password: String,
