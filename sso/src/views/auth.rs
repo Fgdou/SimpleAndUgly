@@ -1,14 +1,27 @@
-use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
-use actix_web::cookie::Cookie;
+use crate::errors::login::LoginError;
+use crate::AppState;
+use actix_web::body::MessageBody;
 use actix_web::cookie::time::OffsetDateTime;
+use actix_web::cookie::Cookie;
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
-use crate::AppState;
-use crate::errors::login::LoginError;
+use std::ops::Deref;
+
+fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
+    html! {
+        (PreEscaped(format!("<script>setTimeout(() => window.location.replace(\"{path}\"), {timeout})</script>")))
+        (msg) ". Redirecting..."
+    }
+}
 
 #[get("/login")]
-async fn login() -> impl Responder {
-    login_content(None)
+async fn login(state: web::Data<AppState>) -> impl Responder {
+    let user = state.user.lock().unwrap();
+    match user.deref() {
+        None => login_content(None),
+        Some(_) => forward("You are already connected", "/", 1000)
+    }
 }
 
 #[derive(Deserialize)]
@@ -27,10 +40,7 @@ pub async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState
             .body(login_content(Some(e))),
         Ok(token) => {
 
-            let content = html! {
-                (PreEscaped("<script>setTimeout(() => window.location.replace(\"/\"), 3000)</script>"))
-                "You are now connected !"
-            };
+            let content = forward("You are now connected", "/", 1000);
 
             response.cookie(
                 Cookie::build("token", token.value)
@@ -55,10 +65,7 @@ pub async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Respon
                 .expires(OffsetDateTime::now_utc())
                 .finish()
         )
-        .body(html! {
-            (PreEscaped("<script>setTimeout(() => window.location.replace(\"/\"), 5000)</script>"))
-            "You are now logged out"
-        })
+        .body(forward("You are not disconnected", "/", 1000))
 }
 
 fn login_content(error: Option<LoginError>) -> Markup {

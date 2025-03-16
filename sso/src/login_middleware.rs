@@ -10,16 +10,25 @@ pub async fn login_middleware(
     req: ServiceRequest,
     next: Next<impl MessageBody>,
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
-    if req.path() != "/login" {
-        let state: &web::Data<AppState> = req.app_data().unwrap();
-
-        let cookie = match req.cookie("token") {
-            None => return Err(Error::from(AuthError::TokenNotExist)),
-            Some(cookie) => cookie
-        };
-        let user = state.auth.authenticate(cookie.value())?;
-        *state.user.lock().unwrap() = Some(user);
-    }
     let next = Rc::new(next);
+
+    let excluded_path = [
+        "/login",
+        "/",
+        "/register",
+    ];
+
+    let state: &web::Data<AppState> = req.app_data().unwrap();
+
+    let cookie = match req.cookie("token") {
+        None if excluded_path.contains(&req.path()) => {
+            return Ok(next.call(req).await?)
+        }
+        None => return Err(Error::from(AuthError::TokenNotExist)),
+        Some(cookie) => cookie
+    };
+    let user = state.auth.authenticate(cookie.value())?;
+    *state.user.lock().unwrap() = Some(user);
+
     Ok(next.call(req).await?)
 }

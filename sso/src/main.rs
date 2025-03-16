@@ -4,58 +4,33 @@ mod repositories;
 mod services;
 mod views;
 mod login_middleware;
+mod app_state;
 
-use crate::objects::user::User;
-use crate::repositories::tokens::TokenRepo;
-use crate::repositories::users::UserRepo;
-use crate::services::auth::Auth;
+use std::ops::Deref;
 use actix_web::body::MessageBody;
 use actix_web::dev::Service;
 use actix_web::middleware::from_fn;
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
-use rusqlite::{Connection, OpenFlags};
+use actix_web::{get, web, App, HttpServer, Responder};
+use maud::html;
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
-
-#[derive(Clone)]
-struct AppState {
-    auth: Arc<Auth>,
-    user: Arc<Mutex<Option<User>>>,
-}
-impl AppState {
-    pub fn new(path: &str) -> Self {
-        let connection = Arc::new(Mutex::new(
-            Connection::open_with_flags(
-                path,
-                OpenFlags::default() | OpenFlags::SQLITE_OPEN_FULL_MUTEX
-            ).unwrap()
-        ));
-        let tokens = Arc::new(TokenRepo::new(connection.clone()));
-        let users = Arc::new(UserRepo::new(connection.clone()));
-
-        let auth = Arc::new(Auth {
-            user_repo: users,
-            token_repo: tokens,
-        });
-
-        if let None = auth.user_repo.get_user_by_email("admin@example.com") {
-            println!("Info: Creating Admin user");
-            auth.user_repo.add_user(
-                User::new("admin@example.com".to_string(), "Admin".to_string(), "admin".to_string())
-            );
-        }
-
-        Self {
-            auth,
-            user: Arc::new(Mutex::new(None)),
-        }
-
-    }
-}
+use crate::app_state::AppState;
 
 #[get("/echo")]
 async fn echo() -> impl Responder {
-    HttpResponse::Ok().body("Hello World !")
+    "Hello World !"
+}
+
+#[get("/")]
+async fn home(state: web::Data<AppState>) -> impl Responder {
+    let user = state.user.lock().unwrap();
+    let name = match user.deref() {
+        None => "Anonymous",
+        Some(user) => &user.name
+    };
+
+    html! {
+        "Hello " (name)
+    }
 }
 
 #[actix_web::main]
@@ -64,9 +39,11 @@ async fn main() -> std::io::Result<()> {
         let services = AppState::new("/tmp/db.sqlite");
         App::new()
             .service(echo)
+            .service(home)
             .service(views::auth::login)
             .service(views::auth::login_post)
             .service(views::auth::logout)
+            .service(views::users::apply_scope(web::scope("/users")))
             .app_data(web::Data::new(services))
             .wrap(from_fn(login_middleware::login_middleware))
     })
