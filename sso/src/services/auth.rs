@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::rc::Rc;
 
 use crate::{errors::{login::{AuthError, LoginError}, register::RegisterError}, objects::{token::{Token, TokenType}, user::User}, repositories::{tokens::TokenRepo, users::UserRepo}};
 
@@ -76,5 +76,58 @@ impl Auth {
             None => Err(AuthError::UserNotExist),
             Some(user) => Ok(user)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use rusqlite::Connection;
+
+    use crate::{errors::login::{AuthError, LoginError}, objects::user::User};
+
+    use super::*;
+
+    fn instance_with_admin() -> Auth {
+        let path = "/tmp/testdb.sqlite";
+        let _ = fs::remove_file(path);
+
+        let conn = Rc::new(Connection::open(path).unwrap());
+
+        let tokens = Rc::new(TokenRepo::new(conn.clone()));
+        let users = Rc::new(UserRepo::new(conn.clone()));
+
+        let auth = Auth {
+            token_repo: tokens,
+            user_repo: users,
+        };
+
+        let token = auth.create_register_token("admin@example.com".to_string());
+        auth.register(&token.value, UserRequest {
+            email: "admin@example.com".to_string(),
+            name: "Admin".to_string(),
+            password: "admin".to_string(),
+        }).unwrap();
+
+        auth
+    }
+
+    #[test]
+    fn test_login() {
+        let auth = instance_with_admin();
+
+        assert_eq!(Err(LoginError::InvalidEmail), auth.login("test@test.test", "test"));
+        assert_eq!(Err(LoginError::InvalidPassword), auth.login("admin@example.com", "test"));
+
+        let token = auth.login("admin@example.com", "admin");
+        assert_eq!(true, token.is_ok());
+        let token = token.unwrap();
+
+        assert_eq!(Err(AuthError::TokenNotExist), auth.authenticate("test"));
+        assert_eq!(
+            Ok(User::new("admin@example.com".to_string(), "admin".to_string(), "admin".to_string())),
+            auth.authenticate(&token.value)
+        );
     }
 }
