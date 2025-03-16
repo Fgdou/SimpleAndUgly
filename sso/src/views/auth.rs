@@ -11,6 +11,7 @@ use crate::views::home::get_navbar;
 
 fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
     html! {
+        (get_navbar(None, "Forward"))
         (PreEscaped(format!("<script>setTimeout(() => window.location.replace(\"{path}\"), {timeout})</script>")))
         (msg) ". Redirecting..."
     }
@@ -52,8 +53,7 @@ pub async fn register_post(state: web::Data<AppState>, data: web::Form<RegisterR
 
 fn register_form(error: Option<RegisterError>, content: Option<&RegisterRequest>) -> Markup {
     html!(
-        (get_navbar(None))
-        h1 {"Register"}
+        (get_navbar(None, "Register"))
 
         @if let Some(error) = error {
             "Error : " (error.to_string());
@@ -120,8 +120,7 @@ pub async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Respon
 
 fn login_content(error: Option<LoginError>, content: Option<&LoginRequest>) -> Markup {
     html!(
-        (get_navbar(None))
-        h1 {"Login"}
+        (get_navbar(None, "Login"))
         @if let Some(error) = error {
             "Error : " (error.to_string());
             br;

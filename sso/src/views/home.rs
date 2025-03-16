@@ -1,12 +1,30 @@
 use std::ops::Deref;
 use actix_web::{get, web, Responder};
-use maud::{html, Markup};
+use maud::{html, Markup, PreEscaped};
 use crate::app_state::AppState;
 use crate::objects::user::User;
 
-pub fn get_navbar(user: Option<&User>) -> Markup {
+pub fn get_navbar(user: Option<&User>, page_name: &str) -> Markup {
     html! {
+        head {
+            (PreEscaped(r#"<style>
+            body {
+                display: inline-block;
+                margin: 10% auto;
+                text-align: left;
+            }
+            html {
+                text-align: center;
+            }
+            </style>"#));
+
+            title {"SSO" @if let Some(user) = user {
+                @let name = &user.name;
+                (format!(" - {name}"))
+            }}
+        }
         nav {
+            a href="/" {"Home"} "|"
             @if let Some(user) = user {
                 a href="/users/" {"Users"} "|"
                 a href="/logout" {"Logout"}
@@ -15,6 +33,10 @@ pub fn get_navbar(user: Option<&User>) -> Markup {
                 a href="/register" {"Register"}
             }
         }
+
+        hr;
+
+        h1 {(page_name)}
     }
 }
 
@@ -27,7 +49,7 @@ pub async fn home(state: web::Data<AppState>) -> impl Responder {
     };
 
     html! {
-        (get_navbar(user.as_ref()))
+        (get_navbar(user.as_ref(), "Home"))
 
         "Hello " (name)
     }

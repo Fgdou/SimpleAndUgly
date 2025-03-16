@@ -14,7 +14,7 @@ fn list_user_page(state: &web::Data<AppState>, action_info: ActionInfo) -> impl 
     let tokens = state.auth.token_repo.get_tokens(&TokenType::Registration);
 
     html!(
-        (get_navbar(state.user.lock().unwrap().as_ref()))
+        (get_navbar(state.user.lock().unwrap().as_ref(), "Users"))
         @match action_info {
             ActionInfo::None => {}
             ActionInfo::CreateToken(token) => div {
