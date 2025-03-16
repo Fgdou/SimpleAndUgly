@@ -1,13 +1,12 @@
 use crate::errors::login::LoginError;
+use crate::errors::register::RegisterError;
+use crate::services::auth::UserRequest;
 use crate::AppState;
 use actix_web::cookie::time::OffsetDateTime;
 use actix_web::cookie::Cookie;
-use actix_web::{get, post, web, App, HttpRequest, HttpResponse, Responder, Scope};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
-use std::ops::Deref;
-use crate::errors::register::RegisterError;
-use crate::services::auth::UserRequest;
 
 fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
     html! {
@@ -18,12 +17,12 @@ fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
 
 #[get("/login")]
 pub async fn login() -> impl Responder {
-    login_content(None)
+    login_content(None, None)
 }
 
 #[get("/register")]
 pub async fn register() -> impl Responder {
-    register_form(None)
+    register_form(None, None)
 }
 
 #[derive(Deserialize)]
@@ -37,20 +36,20 @@ struct RegisterRequest {
 pub async fn register_post(state: web::Data<AppState>, data: web::Form<RegisterRequest>) -> impl Responder {
     let data = data.into_inner();
     let response = state.auth.register(&data.token, UserRequest {
-        email: data.email,
-        name: data.name,
-        password: data.password,
+        email: data.email.clone(),
+        name: data.name.clone(),
+        password: data.password.clone(),
     });
 
     match response {
-        Err(e) => register_form(Some(e)),
+        Err(e) => register_form(Some(e), Some(&data)),
         Ok(()) => {
             forward("User created", "/login", 1000)
         }
     }
 }
 
-fn register_form(error: Option<RegisterError>) -> Markup {
+fn register_form(error: Option<RegisterError>, content: Option<&RegisterRequest>) -> Markup {
     html!(
         h1 {"Register"}
 
@@ -60,13 +59,13 @@ fn register_form(error: Option<RegisterError>) -> Markup {
         }
 
         form action="/register" method="post" {
-            input name="token" placeholder="Register Token" type="text";
+            input name="token" placeholder="Register Token" type="text" value=(content.map_or("", |c| &c.token));
             br;
-            input name="email" placeholder="Email" type="email";
+            input name="email" placeholder="Email" type="email" value=(content.map_or("", |c| &c.email));
             br;
-            input name="name" placeholder="Name" type="text";
+            input name="name" placeholder="Name" type="text" value=(content.map_or("", |c| &c.name));
             br;
-            input name="password" placeholder="Password" type="password";
+            input name="password" placeholder="Password" type="password" value=(content.map_or("", |c| &c.password));
             br;
             button type="submit" {"Register"}
         }
@@ -86,7 +85,7 @@ pub async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState
 
     match token {
         Err(e) => response.content_type("text/html")
-            .body(login_content(Some(e))),
+            .body(login_content(Some(e), Some(&body))),
         Ok(token) => {
 
             let content = forward("You are now connected", "/", 1000);
@@ -117,7 +116,7 @@ pub async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Respon
         .body(forward("You are not disconnected", "/", 1000))
 }
 
-fn login_content(error: Option<LoginError>) -> Markup {
+fn login_content(error: Option<LoginError>, content: Option<&LoginRequest>) -> Markup {
     html!(
         h1 {"Login"}
         @if let Some(error) = error {
@@ -125,9 +124,9 @@ fn login_content(error: Option<LoginError>) -> Markup {
             br;
         }
         form action="/login" method="post" {
-            input type="email" name="email" placeholder="email";
+            input type="email" name="email" placeholder="email" value=(content.map_or("", |c| &c.email));
             br;
-            input type="password" name="password" placeholder="password";
+            input type="password" name="password" placeholder="password" value=(content.map_or("", |c| &c.password));
             br;
             button type="submit" {
                 "Login"
