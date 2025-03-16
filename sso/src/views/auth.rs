@@ -2,10 +2,12 @@ use crate::errors::login::LoginError;
 use crate::AppState;
 use actix_web::cookie::time::OffsetDateTime;
 use actix_web::cookie::Cookie;
-use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Scope};
+use actix_web::{get, post, web, App, HttpRequest, HttpResponse, Responder, Scope};
 use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
 use std::ops::Deref;
+use crate::errors::register::RegisterError;
+use crate::services::auth::UserRequest;
 
 fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
     html! {
@@ -15,12 +17,60 @@ fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
 }
 
 #[get("/login")]
-async fn login(state: web::Data<AppState>) -> impl Responder {
-    let user = state.user.lock().unwrap();
-    match user.deref() {
-        None => login_content(None),
-        Some(_) => forward("You are already connected", "/", 1000)
+pub async fn login() -> impl Responder {
+    login_content(None)
+}
+
+#[get("/register")]
+pub async fn register() -> impl Responder {
+    register_form(None)
+}
+
+#[derive(Deserialize)]
+struct RegisterRequest {
+    email: String,
+    name: String,
+    password: String,
+    token: String,
+}
+#[post("/register")]
+pub async fn register_post(state: web::Data<AppState>, data: web::Form<RegisterRequest>) -> impl Responder {
+    let data = data.into_inner();
+    let response = state.auth.register(&data.token, UserRequest {
+        email: data.email,
+        name: data.name,
+        password: data.password,
+    });
+
+    match response {
+        Err(e) => register_form(Some(e)),
+        Ok(()) => {
+            forward("User created", "/login", 1000)
+        }
     }
+}
+
+fn register_form(error: Option<RegisterError>) -> Markup {
+    html!(
+        h1 {"Register"}
+
+        @if let Some(error) = error {
+            "Error : " (error.to_string());
+            br;
+        }
+
+        form action="/register" method="post" {
+            input name="token" placeholder="Register Token" type="text";
+            br;
+            input name="email" placeholder="Email" type="email";
+            br;
+            input name="name" placeholder="Name" type="text";
+            br;
+            input name="password" placeholder="Password" type="password";
+            br;
+            button type="submit" {"Register"}
+        }
+    )
 }
 
 #[derive(Deserialize)]
@@ -29,7 +79,7 @@ struct LoginRequest {
     password: String,
 }
 #[post("/login")]
-async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState>) -> impl Responder {
+pub async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState>) -> impl Responder {
     let token = state.auth.login(&body.email, &body.password);
 
     let mut response = HttpResponse::Ok();
@@ -56,7 +106,7 @@ async fn login_post(body: web::Form<LoginRequest>, state: web::Data<AppState>) -
     }
 }
 #[get("/logout")]
-async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
+pub async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Responder {
     state.auth.token_repo.invalidate_token(req.cookie("token").unwrap().value()).unwrap();
     HttpResponse::Ok()
         .cookie(
@@ -69,15 +119,13 @@ async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Responder 
 
 fn login_content(error: Option<LoginError>) -> Markup {
     html!(
+        h1 {"Login"}
         @if let Some(error) = error {
-            "Error : " @match error {
-                LoginError::InvalidEmail => "Invalid Email",
-                LoginError::InvalidPassword => "Invalid Password"
-            };
+            "Error : " (error.to_string());
             br;
         }
         form action="/login" method="post" {
-            input type="text" name="email" placeholder="email";
+            input type="email" name="email" placeholder="email";
             br;
             input type="password" name="password" placeholder="password";
             br;
@@ -86,10 +134,4 @@ fn login_content(error: Option<LoginError>) -> Markup {
             };
         }
     )
-}
-
-pub fn apply_scope(scope: Scope) -> Scope {
-    scope.service(login)
-        .service(login_post)
-        .service(logout)
 }

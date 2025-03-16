@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq)]
+use derive_more::Display;
+
+#[derive(Debug, PartialEq, Display)]
 pub enum RegisterError {
     EmailAlreadyExist,
     TokenNotExist,
