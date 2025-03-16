@@ -35,6 +35,16 @@ impl Auth {
         }
     }
     pub fn register(&self, token: &str, user: UserRequest) -> Result<(), RegisterError> {
+        if user.email.is_empty() {
+            return Err(RegisterError::EmptyEmail)
+        }
+        if user.name.len() < 3 {
+            return Err(RegisterError::NameUnderThreeCharacter)
+        }
+        if user.password.len() < 5 {
+            return Err(RegisterError::PasswordUnderFiveCharacter)
+        }
+
         let email = match self.token_repo.get_token(token, &TokenType::Registration) {
             None => Err(RegisterError::TokenNotExist),
             Some(token) if !token.is_valid() => Err(RegisterError::TokenExpired),

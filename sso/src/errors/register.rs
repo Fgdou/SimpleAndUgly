@@ -6,5 +6,8 @@ pub enum RegisterError {
     TokenNotExist,
     TokenExpired,
     InternalError,
-    InvalidEmail
+    InvalidEmail,
+    EmptyEmail,
+    NameUnderThreeCharacter,
+    PasswordUnderFiveCharacter,
 }
