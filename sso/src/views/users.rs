@@ -3,6 +3,7 @@ use maud::html;
 use serde::Deserialize;
 use crate::AppState;
 use crate::objects::token::{Token, TokenType};
+use crate::views::home::get_navbar;
 
 enum ActionInfo {
     None,
@@ -13,6 +14,7 @@ fn list_user_page(state: &web::Data<AppState>, action_info: ActionInfo) -> impl 
     let tokens = state.auth.token_repo.get_tokens(&TokenType::Registration);
 
     html!(
+        (get_navbar(state.user.lock().unwrap().as_ref()))
         @match action_info {
             ActionInfo::None => {}
             ActionInfo::CreateToken(token) => div {

@@ -7,6 +7,7 @@ use actix_web::cookie::Cookie;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
+use crate::views::home::get_navbar;
 
 fn forward(msg: &str, path: &str, timeout: u32) -> Markup {
     html! {
@@ -51,6 +52,7 @@ pub async fn register_post(state: web::Data<AppState>, data: web::Form<RegisterR
 
 fn register_form(error: Option<RegisterError>, content: Option<&RegisterRequest>) -> Markup {
     html!(
+        (get_navbar(None))
         h1 {"Register"}
 
         @if let Some(error) = error {
@@ -118,6 +120,7 @@ pub async fn logout(req: HttpRequest, state: web::Data<AppState>) -> impl Respon
 
 fn login_content(error: Option<LoginError>, content: Option<&LoginRequest>) -> Markup {
     html!(
+        (get_navbar(None))
         h1 {"Login"}
         @if let Some(error) = error {
             "Error : " (error.to_string());
