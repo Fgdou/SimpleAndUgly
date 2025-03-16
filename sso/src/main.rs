@@ -7,12 +7,9 @@ mod login_middleware;
 mod app_state;
 
 use std::ops::Deref;
-use actix_web::body::MessageBody;
-use actix_web::dev::Service;
 use actix_web::middleware::from_fn;
 use actix_web::{get, web, App, HttpServer, Responder};
 use maud::html;
-use serde::Deserialize;
 use crate::app_state::AppState;
 
 #[get("/echo")]

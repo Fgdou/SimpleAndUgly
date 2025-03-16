@@ -1,6 +1,5 @@
 use crate::errors::login::LoginError;
 use crate::AppState;
-use actix_web::body::MessageBody;
 use actix_web::cookie::time::OffsetDateTime;
 use actix_web::cookie::Cookie;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
