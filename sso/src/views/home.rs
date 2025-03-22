@@ -27,6 +27,7 @@ pub fn get_navbar(user: Option<&User>, page_name: &str) -> Markup {
             a href="/" {"Home"} "|"
             @if let Some(user) = user {
                 a href="/users/" {"Users"} "|"
+                a href="/apps/" {"Applications"} "|"
                 a href="/logout" {"Logout"}
             } @else {
                 a href="/login" {"Login"} "|"

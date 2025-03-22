@@ -24,6 +24,7 @@ async fn main() -> std::io::Result<()> {
             .service(echo)
             .service(views::home::home)
             .service(views::users::apply_scope(web::scope("/users")))
+            .service(views::apps::apply_scope(web::scope("/apps")))
             .service(views::auth::register_post)
             .service(views::auth::register)
             .service(views::auth::login)

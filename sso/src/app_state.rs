@@ -1,14 +1,17 @@
 use std::sync::{Arc, Mutex};
 use rusqlite::{Connection, OpenFlags};
 use crate::objects::user::User;
+use crate::repositories::applications::ApplicationRepo;
 use crate::repositories::tokens::TokenRepo;
 use crate::repositories::users::UserRepo;
+use crate::services::apps::ApplicationService;
 use crate::services::auth::Auth;
 
 #[derive(Clone)]
 pub struct AppState {
     pub auth: Arc<Auth>,
     pub user: Arc<Mutex<Option<User>>>,
+    pub apps: Arc<ApplicationService>,
 }
 impl AppState {
     pub fn new(path: &str) -> Self {
@@ -33,9 +36,14 @@ impl AppState {
             );
         }
 
+        let apps = ApplicationService {
+            application: Arc::new(ApplicationRepo::new(connection)),
+        };
+
         Self {
             auth,
             user: Arc::new(Mutex::new(None)),
+            apps: Arc::new(apps),
         }
 
     }
