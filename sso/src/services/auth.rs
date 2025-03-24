@@ -1,142 +1,204 @@
 use std::sync::Arc;
-use crate::{errors::{login::{AuthError, LoginError}, register::RegisterError}, objects::{token::{Token, TokenType}, user::User}, repositories::{tokens::TokenRepo, users::UserRepo}};
+use chrono::{DateTime, Days, Utc};
+use rand::distr::Alphanumeric;
+use rand::Rng;
+use regex::Regex;
+use crate::errors::auth::{AuthenticateError, LoginError, RegisterError};
+use crate::errors::validation::{ValidationEnumError, ValidationError};
+use crate::forms::auth::{LoginForm, RegisterForm};
+use crate::objects::config::Config;
+use crate::objects::login_token::LoginToken;
+use crate::objects::user::User;
+use crate::services::factory::Repos;
 
-pub struct UserRequest {
-    pub email: String,
-    pub password: String,
-    pub name: String,
+pub struct AuthService {
+    repos: Repos,
+    config: Config,
 }
 
-impl Into<User> for UserRequest {
-    fn into(self) -> User {
-        User::new(self.email, self.name, self.password)
+type LoginResult = Result<LoginToken, LoginError>;
+type RegisterResult = Result<(), RegisterError>;
+type AuthenticateResult = Result<User, AuthenticateError>;
+
+impl AuthService {
+    fn generate_value() -> String {
+        rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(20)
+            .map(char::from)
+            .collect()
     }
-}
+    fn generate_token(user: &User) -> LoginToken {
+        LoginToken {
+            user: user.email.clone(),
+            expiration: Utc::now() + Days::new(30),
+            value: Self::generate_value(),
+        }
+    }
+    fn date_expired(date: &DateTime<Utc>) -> bool {
+        &Utc::now() > date
+    }
+    fn verify_password(user: &User, password: &str) -> bool {
+        user.password == password
+    }
 
-pub struct Auth {
-    pub user_repo: Arc<UserRepo>,
-    pub token_repo: Arc<TokenRepo>,
-}
+    pub fn login(&self, form: &LoginForm) -> LoginResult {
+        let user = self.repos.user_repo.get_by_email(&form.email)
+            .ok_or(LoginError::EmailNotExist)?;
 
-impl Auth {
-    pub fn login(&self, email: &str, password: &str) -> Result<Token, LoginError> {
-        match self.user_repo.get_user_by_email(email) {
-            None => Err(LoginError::InvalidEmail),
-            Some(user) => {
-                match user.verify_password(password) {
-                    false => Err(LoginError::InvalidPassword),
-                    true => {
-                        let token = Token::new(email.to_string(), TokenType::Session);
-                        self.token_repo.add_token(token.clone());
-                        Ok(token)
-                    }
+        if !Self::verify_password(&user, &form.password) {
+            return Err(LoginError::WrongPassword);
+        }
+
+        let token = Self::generate_token(&user);
+
+        self.repos.login_token_repo.add(token.clone());
+
+        Ok(token)
+    }
+    fn verify_register_token(&self, token: &str) -> Result<(), RegisterError> {
+        match self.repos.register_token_repo.get_by_value(token) {
+            None => Err(RegisterError::TokenNotExist),
+            Some(token) => {
+                match Self::date_expired(&token.expiration) {
+                    true => Err(RegisterError::TokenExpired),
+                    false => Ok(())
                 }
             }
         }
     }
-    pub fn register(&self, token: &str, user: UserRequest) -> Result<(), RegisterError> {
-        if user.email.is_empty() {
-            return Err(RegisterError::EmptyEmail)
+    fn validate_user(form: &RegisterForm) -> Result<(), RegisterError> {
+        if form.name.len() < 2 || form.name.len() > 40 {
+            return Err(RegisterError::Validation(ValidationError {
+                field: "name".to_string(),
+                error: ValidationEnumError::Size(2, 40)
+            }));
         }
-        if user.name.len() < 3 {
-            return Err(RegisterError::NameUnderThreeCharacter)
+        if form.password.len() < 6 || form.password.len() > 255 {
+            return Err(RegisterError::Validation(ValidationError {
+                field: "password".to_string(),
+                error: ValidationEnumError::Size(6, 255)
+            }));
         }
-        if user.password.len() < 5 {
-            return Err(RegisterError::PasswordUnderFiveCharacter)
+        if !Regex::new(r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$").unwrap().is_match(&form.email) {
+            return Err(RegisterError::Validation(ValidationError {
+                field: "email".to_string(),
+                error: ValidationEnumError::Regex("abc@example.com".to_string()),
+            }));
         }
-
-        let email = match self.token_repo.get_token(token, &TokenType::Registration) {
-            None => Err(RegisterError::TokenNotExist),
-            Some(token) if !token.is_valid() => Err(RegisterError::TokenExpired),
-            Some(email) => Ok(email.user_email),
+        Ok(())
+    }
+    pub fn register(&self, form: &RegisterForm) -> RegisterResult {
+        match (self.config.restrict_registration, &form.token) {
+            (false, _) => Ok(()),
+            (true, None) => Err(RegisterError::TokenRequired),
+            (true, Some(token)) => self.verify_register_token(token),
         }?;
 
-        if email != user.email {
-            return Err(RegisterError::InvalidEmail)
-        }
+        Self::validate_user(form)?;
 
-        if let Some(_) = self.user_repo.get_user_by_email(&user.email) {
-            return Err(RegisterError::EmailAlreadyExist);
-        }
+        let user = User {
+            email: form.email.clone(),
+            password: form.password.clone(),
+            name: form.name.clone(),
+            admin: false,
+            created: Utc::now(),
+        };
 
-        self.user_repo.add_user(user.into());
+        self.repos.user_repo.add(user);
 
-        if let Err(_) = self.token_repo.invalidate_token(token) {
-            return Err(RegisterError::InternalError)
+        if let Some(token) = &form.token {
+            self.repos.register_token_repo.delete(token)
         }
 
         Ok(())
-
     }
-    pub fn create_register_token(&self, email: String) -> Token {
-        let token = Token::new(email, TokenType::Registration);
-        self.token_repo.add_token(token.clone());
-        token
-    }
-
-    pub fn authenticate(&self, token: &str) -> Result<User, AuthError> {
-        let email = match self.token_repo.get_token(token, &TokenType::Session) {
-            None => Err(AuthError::TokenNotExist),
-            Some(token) if !token.is_valid() => Err(AuthError::TokenExpired),
-            Some(token) => Ok(token.user_email),
+    pub fn authenticate(&self, token: String) -> AuthenticateResult {
+        let token = match self.repos.login_token_repo.get_by_value(&token) {
+            None => Err(AuthenticateError::TokenNotExist),
+            Some(token) => {
+                match Self::date_expired(&token.expiration) {
+                    true => Err(AuthenticateError::TokenExpired),
+                    false => Ok(token),
+                }
+            }
         }?;
 
-        match self.user_repo.get_user_by_email(&email) {
-            None => Err(AuthError::UserNotExist),
-            Some(user) => Ok(user)
+        match self.repos.user_repo.get_by_email(&token.user) {
+            None => Err(AuthenticateError::UserDeleted),
+            Some(user) => Ok(user),
         }
+    }
+    pub fn invalidate_token(&self, token: &str) {
+        self.repos.login_token_repo.delete(token)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::sync::{Arc, Mutex};
-    use rusqlite::Connection;
-
-    use crate::{errors::login::{AuthError, LoginError}, objects::user::User};
-
     use super::*;
 
-    fn instance_with_admin() -> Auth {
-        let path = "/tmp/testdb.sqlite";
-        let _ = fs::remove_file(path);
+    #[test]
+    fn test_validate_user() {
+        assert_eq!(true, AuthService::validate_user(&RegisterForm{
+            name: "Test".to_string(),
+            password: "testtest".to_string(),
+            email: "test@example.com".to_string(),
+            token: None,
+        }).is_ok());
+        assert_eq!(false, AuthService::validate_user(&RegisterForm{
+            name: "Test".to_string(),
+            password: "testtest".to_string(),
+            email: "test".to_string(),
+            token: None,
+        }).is_ok());
+        assert_eq!(false, AuthService::validate_user(&RegisterForm{
+            name: "Test".to_string(),
+            password: "testtest".to_string(),
+            email: "test@@example.com".to_string(),
+            token: None,
+        }).is_ok());
+        assert_eq!(false, AuthService::validate_user(&RegisterForm{
+            name: "Test".to_string(),
+            password: "test".to_string(),
+            email: "test@example.com".to_string(),
+            token: None,
+        }).is_ok());
+    }
 
-        let conn = Arc::new(Mutex::new(Connection::open(path).unwrap()));
-
-        let tokens = Arc::new(TokenRepo::new(conn.clone()));
-        let users = Arc::new(UserRepo::new(conn.clone()));
-
-        let auth = Auth {
-            token_repo: tokens,
-            user_repo: users,
-        };
-
-        let token = auth.create_register_token("admin@example.com".to_string());
-        auth.register(&token.value, UserRequest {
-            email: "admin@example.com".to_string(),
-            name: "Admin".to_string(),
-            password: "admin".to_string(),
-        }).unwrap();
-
-        auth
+    fn get_service() -> AuthService {
+        let config = Config::default();
+        AuthService{
+            repos: Repos::new(&config),
+            config,
+        }
     }
 
     #[test]
     fn test_login() {
-        let auth = instance_with_admin();
+        let service = get_service();
 
-        assert_eq!(Err(LoginError::InvalidEmail), auth.login("test@test.test", "test"));
-        assert_eq!(Err(LoginError::InvalidPassword), auth.login("admin@example.com", "test"));
+        assert_eq!(true, service.login(&LoginForm {
+            email: "admin@example.com".to_string(),
+            password: "admin".to_string()
+        }).is_ok());
+        assert_eq!(false, service.login(&LoginForm {
+            email: "admin@example.com".to_string(),
+            password: "admi".to_string()
+        }).is_ok());
+        assert_eq!(false, service.login(&LoginForm {
+            email: "admi@example.com".to_string(),
+            password: "admin".to_string()
+        }).is_ok())
+    }
 
-        let token = auth.login("admin@example.com", "admin");
-        assert_eq!(true, token.is_ok());
-        let token = token.unwrap();
-
-        assert_eq!(Err(AuthError::TokenNotExist), auth.authenticate("test"));
-        assert_eq!(
-            Ok(User::new("admin@example.com".to_string(), "admin".to_string(), "admin".to_string())),
-            auth.authenticate(&token.value)
-        );
+    #[test]
+    fn test_register() {
+        assert_eq!(true, get_service().register(&RegisterForm {
+            password: "testtest".to_string(),
+            email: "admin2@example.com".to_string(),
+            token: Some("token".to_string()),
+            name: "Admin".to_string()
+        }).is_ok())
     }
 }
