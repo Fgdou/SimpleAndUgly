@@ -1,12 +1,52 @@
-use actix_web::{get, post, web, HttpResponse, Scope};
-use actix_web::body::MessageBody;
+use actix_web::{get, post, web, Error, HttpResponse, Scope};
+use actix_web::body::{BoxBody, MessageBody};
 use actix_web::cookie::{Cookie, Expiration};
 use actix_web::cookie::time::{OffsetDateTime, UtcDateTime};
+use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::http::StatusCode;
+use actix_web::middleware::Next;
 use maud::{html, Markup};
 use crate::app::app_state::AppState;
 use crate::forms::auth::LoginForm;
 use crate::views::nav::get_nav;
+
+pub async fn auth_middleware(
+    req: ServiceRequest,
+    next: Next<BoxBody>,
+) -> Result<ServiceResponse<BoxBody>, Error> {
+    let excluded_paths = [
+        "/auth/login",
+        "/auth/register",
+        "/"
+    ];
+
+    let excluded = excluded_paths.contains(&req.path());
+    let cookie = req.cookie("token");
+
+    if let Some(cookie) = cookie {
+        let value = cookie.value();
+
+        let state = req.app_data::<web::Data<AppState>>().unwrap();
+        let user = state.services.auth.authenticate(value);
+
+        match (excluded, user) {
+            (_, Ok(user)) => { *state.user.lock().unwrap() = Some(user); }
+            (false, Err(e)) => {
+                let content = html! {
+                    script {"window.location.replace('/auth/login')"}
+                    div { (e) }
+                };
+
+                return Ok(ServiceResponse::new(req.request().clone(), HttpResponse::build(StatusCode::UNAUTHORIZED)
+                    .body(content)));
+            }
+            _ => {},
+        }
+    }
+    // pre-processing
+    next.call(req).await
+    // post-processing
+}
 
 #[post("/login")]
 async fn login(state: web::Data<AppState>, form: web::Form<LoginForm>) -> HttpResponse {

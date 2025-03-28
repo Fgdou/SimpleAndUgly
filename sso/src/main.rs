@@ -1,7 +1,9 @@
 use crate::app::app_state::AppState;
 use crate::objects::config::Config;
+use crate::views::auth::auth_middleware;
 use crate::views::nav::get_nav;
 use actix_web::body::MessageBody;
+use actix_web::middleware::from_fn;
 use actix_web::{get, web, App, HttpServer};
 use maud::{html, Markup};
 
@@ -19,6 +21,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .app_data(web::Data::new(AppState::new(&Config::default())))
+            .wrap(from_fn(auth_middleware))
             .service(hello_world)
             .service(home)
             .service(views::auth::get_scope())

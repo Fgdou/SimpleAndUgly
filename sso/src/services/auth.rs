@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use chrono::{DateTime, Days, Utc};
 use rand::distr::Alphanumeric;
 use rand::Rng;
@@ -119,8 +118,8 @@ impl AuthService {
 
         Ok(())
     }
-    pub fn authenticate(&self, token: String) -> AuthenticateResult {
-        let token = match self.repos.login_token_repo.get_by_value(&token) {
+    pub fn authenticate(&self, token: &str) -> AuthenticateResult {
+        let token = match self.repos.login_token_repo.get_by_value(token) {
             None => Err(AuthenticateError::TokenNotExist),
             Some(token) => {
                 match Self::date_expired(&token.expiration) {

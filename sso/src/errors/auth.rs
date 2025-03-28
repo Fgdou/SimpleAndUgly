@@ -29,3 +29,14 @@ impl Display for LoginError {
         Ok(())
     }
 }
+impl Display for AuthenticateError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            AuthenticateError::TokenNotExist => "Invalid Token",
+            AuthenticateError::TokenExpired => "Expired Token",
+            AuthenticateError::UserDeleted => "User does not exist",
+        };
+        f.write_str(str)?;
+        Ok(())
+    }
+}

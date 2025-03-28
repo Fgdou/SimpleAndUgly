@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::repos::applications::ApplicationRepo;
 use crate::repos::login_tokens::LoginTokenRepo;
 use crate::repos::register_tokens::RegisterTokenRepo;
