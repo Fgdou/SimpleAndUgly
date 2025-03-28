@@ -6,7 +6,7 @@ use actix_web::body::MessageBody;
 use actix_web::middleware::{from_fn, Next};
 use actix_web::{get, web, App, Error, HttpServer};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::http::header::{CacheControl, CacheDirective, HeaderName, HeaderValue, CACHE_CONTROL};
+use actix_web::http::header::{HeaderValue, CACHE_CONTROL};
 use maud::{html, Markup};
 
 mod errors;
