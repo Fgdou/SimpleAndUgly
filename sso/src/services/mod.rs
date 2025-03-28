@@ -1,2 +1,2 @@
-mod auth;
-mod factory;
+pub mod auth;
+pub mod factory;

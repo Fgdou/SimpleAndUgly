@@ -4,12 +4,27 @@ use crate::repos::applications::{ApplicationRepo, ApplicationRepoMemory};
 use crate::repos::login_tokens::{LoginTokenRepo, LoginTokenRepoMemory};
 use crate::repos::register_tokens::{RegisterTokenRepo, RegisterTokenRepoMemory};
 use crate::repos::users::{UserRepo, UserRepoMemory};
+use crate::services::auth::AuthService;
 
 pub struct Repos {
     pub user_repo: Arc<dyn UserRepo>,
     pub login_token_repo: Arc<dyn LoginTokenRepo>,
     pub register_token_repo: Arc<dyn RegisterTokenRepo>,
     pub application_repo: Arc<dyn ApplicationRepo>,
+}
+
+pub struct Services {
+    pub auth: AuthService
+}
+
+impl Services {
+    pub fn new (config: &Config) -> Self {
+        let repos = Repos::new(config);
+
+        Self {
+            auth: AuthService::new(config.clone(), repos)
+        }
+    }
 }
 
 impl Repos {

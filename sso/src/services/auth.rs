@@ -21,6 +21,12 @@ type RegisterResult = Result<(), RegisterError>;
 type AuthenticateResult = Result<User, AuthenticateError>;
 
 impl AuthService {
+    pub fn new(config: Config, repos: Repos) -> Self {
+        Self {
+            repos,
+            config
+        }
+    }
     fn generate_value() -> String {
         rand::rng()
             .sample_iter(&Alphanumeric)
