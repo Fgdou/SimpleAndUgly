@@ -7,7 +7,7 @@ pub fn get_nav(data: &AppState) -> Markup {
         nav {
             a href="/" { "home" }
             @if data.is_connected() {
-                a {"logout"}
+                a href="/auth/logout" {"logout"}
             } @else {
                 a href="/auth/login" {"login"}
                 a {"register"}

@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 pub struct AppState {
     pub services: Services,
-    pub user: Mutex<Option<User>>
+    pub user: Mutex<Option<(String, User)>>
 }
 
 impl AppState {

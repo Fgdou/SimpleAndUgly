@@ -1,8 +1,10 @@
+use std::os::linux::raw::stat;
 use actix_web::{get, post, web, Error, HttpResponse, Scope};
 use actix_web::body::{BoxBody, MessageBody};
 use actix_web::cookie::{Cookie, Expiration};
 use actix_web::cookie::time::{OffsetDateTime, UtcDateTime};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
+use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::middleware::Next;
 use maud::{html, Markup};
@@ -30,7 +32,7 @@ pub async fn auth_middleware(
         let user = state.services.auth.authenticate(value);
 
         match (excluded, user) {
-            (_, Ok(user)) => { *state.user.lock().unwrap() = Some(user); }
+            (_, Ok(user)) => { *state.user.lock().unwrap() = Some((value.to_string(), user)); }
             (false, Err(e)) => {
                 let content = html! {
                     script {"window.location.replace('/auth/login')"}
@@ -46,6 +48,19 @@ pub async fn auth_middleware(
     // pre-processing
     next.call(req).await
     // post-processing
+}
+
+#[get("logout")]
+async fn logout(state: web::Data<AppState>) -> HttpResponse {
+    if let Some(token) = state.user.lock().unwrap().as_ref() {
+        state.services.auth.invalidate_token(&token.0);
+    }
+    HttpResponse::build(StatusCode::OK)
+        .content_type(ContentType::html())
+        .body(html!{
+            "You have been disconnected";
+            script {"window.location.replace('/')"}
+        })
 }
 
 #[post("/login")]
@@ -106,4 +121,5 @@ pub fn get_scope() -> Scope {
     web::scope("/auth")
         .service(login_page)
         .service(login)
+        .service(logout)
 }
